@@ -1,0 +1,87 @@
+<!--
+ * @Description: 
+ * @Author: caiwu
+ * @CreateDate: 
+ * @LastEditor: 
+ * @LastEditTime: 2021-08-16 16:44:30
+-->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+</head>
+
+<body>
+    <div id="app">
+    </div>
+</body>
+<script>
+// 沙箱
+function compileCode(src) {
+  src = `with (proxyObj){\n let window = this;\n ${src}\n}`
+  return new Function('proxyObj', src)
+}
+
+function proxyObj(target) {
+  let window = { webpackJsonp:null }
+  let ignoreList = [
+    'setTimeout',
+    'clearTimeout',
+    'setInterval',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    'addEventListener',
+    'getComputedStyle',
+    ]
+  let proxyObj = new Proxy(target, {
+    get(target, key) {
+      if (key === Symbol.unscopables) {
+        return undefined;
+      }   
+      if (key === 'WINDOW') {
+        console.log('get WINDOW');
+      }
+      console.log('getter:','window.'+key);
+      if (ignoreList.includes(key)) {
+        return Reflect.get(target, key).bind(null)
+      }
+      if (key === 'window' || key === 'self') {
+        return window
+      }
+      if (key === 'WINDOW') {
+        console.log('get WINDOW');
+        return target
+      }
+      return Reflect.get(window, key) || Reflect.get(target, key)
+    },
+    has(target, key){
+        return true
+    },
+    set(target, key, value) {
+      console.log(`setter:${key}=${value}`)
+      // let ignoreList = ['webpackJsonp']
+      let ignoreList = []
+      Reflect.set(window, key, value)
+      return true
+    },
+    defineProperty: function(target, prop, descriptor) {
+      !descriptor.writable && console.error('禁止子应用在window中定义writable为false的变量;这会造成子应用在第二次打开发生redefine错误')
+      return Reflect.defineProperty(target, prop, descriptor)
+    },
+  })
+  return proxyObj
+}
+
+function createSandbox(src, target) {
+  let proxy = proxyObj(target)
+  compileCode(src).call(proxy, proxy)
+}
+
+// 在沙箱中运行测试代码
+let source = `!function(){console.log(WINDOW)}()`
+
+let sandbox = createSandbox(source,window)
+</script>
+
+</html>
